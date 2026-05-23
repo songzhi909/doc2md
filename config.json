@@ -1,0 +1,27 @@
+{
+    "server": {
+        "host": "127.0.0.1",
+        "port": 5000,
+        "debug": true
+    },
+    "output": {
+        "default_path": "./output"
+    },
+    "temp": {
+        "dir": "./temp"
+    },
+    "supported_extensions": [
+        "pdf", "doc", "docx", "xlsx", "pptx",
+        "csv", "json", "xml",
+        "html", "htm",
+        "epub",
+        "txt", "md"
+    ],
+    "log": {
+        "dir": "logs",
+        "max_bytes": 10485760,
+        "backup_count": 5,
+        "console_level": "INFO",
+        "file_level": "DEBUG"
+    }
+}

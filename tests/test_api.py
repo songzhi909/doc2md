@@ -76,3 +76,96 @@ def test_convert_api_file_upload(client):
         assert data['success'] == True
         assert 'converted' in data
         assert 'failed' in data
+
+def test_browse_api_returns_directories(client):
+    """测试浏览API返回目录列表"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 创建子目录和文件
+        os.makedirs(os.path.join(tmpdir, 'subdir1'))
+        os.makedirs(os.path.join(tmpdir, 'subdir2'))
+        open(os.path.join(tmpdir, 'file.txt'), 'w').close()
+
+        response = client.post('/api/browse', json={
+            'path': tmpdir
+        })
+
+        assert response.status_code == 200
+        data = response.get_json()
+        assert data['success'] == True
+        assert len(data['items']) == 3
+        # 目录应该排在前面
+        assert data['items'][0]['is_dir'] == True
+        assert data['items'][1]['is_dir'] == True
+        assert data['items'][2]['is_dir'] == False
+
+def test_browse_api_invalid_path(client):
+    """测试浏览API处理无效路径"""
+    response = client.post('/api/browse', json={
+        'path': '/nonexistent/path'
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == False
+    assert 'error' in data
+
+def test_browse_api_empty_path(client):
+    """测试浏览API空路径返回驱动器列表"""
+    response = client.post('/api/browse', json={
+        'path': ''
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == True
+    # Windows 应该返回驱动器列表
+    if os.name == 'nt':
+        assert len(data['items']) > 0
+        assert data['items'][0]['path'].endswith(':\\')
+
+def test_config_api(client):
+    """测试配置API"""
+    response = client.get('/api/config')
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == True
+    assert 'config' in data
+    assert 'server' in data['config']
+    assert 'supported_extensions' in data['config']
+
+def test_export_api_returns_zip(client):
+    """测试导出API返回ZIP文件"""
+    import zipfile
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 创建测试文件
+        with open(os.path.join(tmpdir, 'test1.md'), 'w') as f:
+            f.write('# Test 1')
+        with open(os.path.join(tmpdir, 'test2.md'), 'w') as f:
+            f.write('# Test 2')
+
+        response = client.post('/api/export', json={
+            'output_path': tmpdir
+        })
+
+        assert response.status_code == 200
+        assert response.content_type == 'application/zip'
+
+        # 验证 ZIP 内容
+        import io
+        zip_data = io.BytesIO(response.data)
+        with zipfile.ZipFile(zip_data, 'r') as zf:
+            names = zf.namelist()
+            assert 'test1.md' in names
+            assert 'test2.md' in names
+
+def test_export_api_invalid_path(client):
+    """测试导出API处理无效路径"""
+    response = client.post('/api/export', json={
+        'output_path': '/nonexistent/path'
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == False
+    assert 'error' in data

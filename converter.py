@@ -3,22 +3,23 @@ import tempfile
 from typing import List, Dict, Any
 from markitdown import MarkItDown
 from logger import logger
+from config import get_config
 
-SUPPORTED_EXTENSIONS = {
-    # Office 文档
+# 从配置文件加载支持的扩展名
+_config = get_config()
+SUPPORTED_EXTENSIONS = set(_config.get('supported_extensions', [
     'pdf', 'doc', 'docx', 'xlsx', 'pptx',
-    # 数据格式
     'csv', 'json', 'xml',
-    # 网页格式
     'html', 'htm',
-    # 电子书
     'epub',
-    # 文本格式
     'txt', 'md'
-}
+]))
 
 # 需要先转换为 docx 的格式
 DOC_TO_DOCX_EXTENSIONS = {'doc'}
+
+# 临时目录配置
+TEMP_DIR = _config.get('temp', {}).get('dir', './temp')
 
 _md = MarkItDown()
 
@@ -38,7 +39,8 @@ def _doc_to_docx(doc_path: str) -> str:
     from doc2docx import convert
 
     # 创建临时目录保存转换后的文件
-    temp_dir = tempfile.mkdtemp()
+    os.makedirs(TEMP_DIR, exist_ok=True)
+    temp_dir = tempfile.mkdtemp(dir=TEMP_DIR)
     docx_path = os.path.join(temp_dir, os.path.splitext(os.path.basename(doc_path))[0] + '.docx')
 
     logger.debug(f'转换 .doc 到 .docx: {doc_path} -> {docx_path}')
@@ -189,6 +191,76 @@ def convert_batch(input_path: str, output_path: str) -> Dict[str, Any]:
 
     logger.info(f'批量转换完成: 成功 {converted} 个, 失败 {failed} 个')
     return {
+        'converted': converted,
+        'failed': failed,
+        'failures': failures
+    }
+
+def convert_batch_with_progress(input_path: str, output_path: str):
+    """
+    批量转换文件夹中的所有支持文件（带进度回调）
+
+    Args:
+        input_path: 输入文件夹路径
+        output_path: 输出文件夹路径
+
+    Yields:
+        dict: 进度信息
+    """
+    if not os.path.isdir(input_path):
+        yield {
+            'type': 'error',
+            'error': f'输入路径不存在或不是目录: {input_path}'
+        }
+        return
+
+    logger.info(f'开始批量转换: {input_path} -> {output_path}')
+    files = scan_files(input_path)
+    total = len(files)
+    converted = 0
+    failed = 0
+    failures = []
+
+    # 发送开始事件
+    yield {
+        'type': 'start',
+        'total': total
+    }
+
+    for i, file_info in enumerate(files, 1):
+        input_file = os.path.join(input_path, file_info['path'])
+        output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
+        output_file = os.path.join(output_path, output_rel)
+
+        logger.debug(f'[{i}/{total}] 转换中: {file_info["path"]}')
+        result = convert_file(input_file, output_file)
+
+        if result['success']:
+            converted += 1
+            logger.debug(f'[{i}/{total}] 转换成功: {file_info["path"]}')
+        else:
+            failed += 1
+            failures.append({
+                'file': file_info['path'],
+                'error': result['error']
+            })
+            logger.warning(f'[{i}/{total}] 转换失败: {file_info["path"]} - {result["error"]}')
+
+        # 发送进度事件
+        yield {
+            'type': 'progress',
+            'current': i,
+            'total': total,
+            'file': file_info['path'],
+            'success': result['success'],
+            'converted': converted,
+            'failed': failed
+        }
+
+    # 发送完成事件
+    logger.info(f'批量转换完成: 成功 {converted} 个, 失败 {failed} 个')
+    yield {
+        'type': 'complete',
         'converted': converted,
         'failed': failed,
         'failures': failures

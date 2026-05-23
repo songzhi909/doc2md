@@ -23,7 +23,10 @@
 
             <div class="form-group">
                 <label for="outputPath">输出文件夹路径：</label>
-                <input type="text" id="outputPath" value="./output" placeholder="输出文件夹路径">
+                <div class="input-row">
+                    <input type="text" id="outputPath" value="./output" placeholder="输出文件夹路径">
+                    <button onclick="openFolderBrowser()">浏览...</button>
+                </div>
             </div>
         </div>
 
@@ -33,6 +36,15 @@
             <button id="convertBtn" onclick="convertFiles()" disabled>开始转换</button>
         </div>
 
+        <div id="progressSection" class="result-section" style="display:none;">
+            <h3>转换进度</h3>
+            <div class="progress-bar">
+                <div id="progressFill" class="progress-fill" style="width: 0%"></div>
+            </div>
+            <div id="progressText" class="progress-text">准备中...</div>
+            <div id="progressDetail" class="progress-detail"></div>
+        </div>
+
         <div id="convertResult" class="result-section" style="display:none;">
             <h3>转换结果</h3>
             <div id="stats"></div>
@@ -40,12 +52,14 @@
                 <h4>失败文件：</h4>
                 <ul id="failureList"></ul>
             </div>
+            <button id="exportBtn" onclick="exportZip()" style="display:none;">导出 ZIP</button>
         </div>
     </div>
 
     <script>
         let scannedFiles = [];
         let selectedFiles = [];
+        let lastOutputPath = '';
 
         function handleFolderSelect(input) {
             const files = input.files;
@@ -133,8 +147,11 @@
             const outputPath = document.getElementById('outputPath').value;
             document.getElementById('convertBtn').disabled = true;
             document.getElementById('convertBtn').textContent = '转换中...';
+            document.getElementById('progressSection').style.display = 'block';
+            document.getElementById('convertResult').style.display = 'none';
+            document.getElementById('exportBtn').style.display = 'none';
 
-            // 上传文件并转换
+            // 上传文件并转换（使用流式接口）
             const formData = new FormData();
             formData.append('output_path', outputPath);
 
@@ -142,25 +159,86 @@
                 formData.append('files', selectedFiles[i]);
             }
 
-            fetch('/api/convert', {
+            fetch('/api/convert-stream', {
                 method: 'POST',
                 body: formData
             })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    displayConvertResult(data);
-                } else {
-                    alert('转换失败: ' + data.error);
+            .then(response => {
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let buffer = '';
+
+                function read() {
+                    reader.read().then(({ done, value }) => {
+                        if (done) {
+                            return;
+                        }
+
+                        buffer += decoder.decode(value, { stream: true });
+                        const lines = buffer.split('\n\n');
+                        buffer = lines.pop();
+
+                        for (const line of lines) {
+                            if (line.startsWith('data: ')) {
+                                const data = JSON.parse(line.slice(6));
+                                handleProgressEvent(data);
+                            }
+                        }
+
+                        read();
+                    });
                 }
-                document.getElementById('convertBtn').disabled = false;
-                document.getElementById('convertBtn').textContent = '开始转换';
+
+                read();
             })
             .catch(error => {
                 alert('请求失败: ' + error);
                 document.getElementById('convertBtn').disabled = false;
                 document.getElementById('convertBtn').textContent = '开始转换';
             });
+        }
+
+        function handleProgressEvent(data) {
+            switch (data.type) {
+                case 'start':
+                    document.getElementById('progressText').textContent = `共 ${data.total} 个文件`;
+                    document.getElementById('progressDetail').textContent = '';
+                    break;
+
+                case 'progress':
+                    const percent = Math.round((data.current / data.total) * 100);
+                    document.getElementById('progressFill').style.width = percent + '%';
+                    document.getElementById('progressText').textContent =
+                        `${data.current} / ${data.total} (${percent}%)`;
+                    document.getElementById('progressDetail').textContent =
+                        `${data.success ? '✓' : '✗'} ${data.file}`;
+                    break;
+
+                case 'complete':
+                    document.getElementById('progressFill').style.width = '100%';
+                    document.getElementById('progressText').textContent = '转换完成';
+                    document.getElementById('progressDetail').textContent =
+                        `成功: ${data.converted}  失败: ${data.failed}`;
+
+                    const result = {
+                        success: true,
+                        converted: data.converted,
+                        failed: data.failed,
+                        failures: data.failures,
+                        output_path: document.getElementById('outputPath').value
+                    };
+                    displayConvertResult(result);
+
+                    document.getElementById('convertBtn').disabled = false;
+                    document.getElementById('convertBtn').textContent = '开始转换';
+                    break;
+
+                case 'error':
+                    alert('转换失败: ' + data.error);
+                    document.getElementById('convertBtn').disabled = false;
+                    document.getElementById('convertBtn').textContent = '开始转换';
+                    break;
+            }
         }
 
         function displayConvertResult(data) {
@@ -175,8 +253,138 @@
                 document.getElementById('failures').style.display = 'block';
             }
 
+            // 存储输出路径并显示导出按钮
+            if (data.output_path && data.converted > 0) {
+                lastOutputPath = data.output_path;
+                document.getElementById('exportBtn').style.display = 'inline-block';
+            }
+
             document.getElementById('convertResult').style.display = 'block';
         }
+
+        function exportZip() {
+            if (!lastOutputPath) {
+                alert('没有可导出的文件');
+                return;
+            }
+
+            const btn = document.getElementById('exportBtn');
+            btn.disabled = true;
+            btn.textContent = '导出中...';
+
+            fetch('/api/export', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ output_path: lastOutputPath })
+            })
+            .then(response => {
+                if (!response.ok) {
+                    return response.json().then(data => { throw new Error(data.error); });
+                }
+                return response.blob();
+            })
+            .then(blob => {
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'converted_docs.zip';
+                a.click();
+                URL.revokeObjectURL(url);
+            })
+            .catch(error => {
+                alert('导出失败: ' + error.message);
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.textContent = '导出 ZIP';
+            });
+        }
+
+        // 文件夹浏览器相关变量
+        let currentBrowsePath = '';
+
+        function openFolderBrowser() {
+            const modal = document.getElementById('folderBrowserModal');
+            modal.style.display = 'block';
+            browseTo('');
+        }
+
+        function closeFolderBrowser() {
+            const modal = document.getElementById('folderBrowserModal');
+            modal.style.display = 'none';
+        }
+
+        function browseTo(path) {
+            fetch('/api/browse', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ path: path })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    currentBrowsePath = data.current_path;
+                    document.getElementById('browsePath').value = currentBrowsePath;
+                    displayBrowseItems(data.items);
+                } else {
+                    alert('浏览失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败: ' + error);
+            });
+        }
+
+        function displayBrowseItems(items) {
+            const container = document.getElementById('browseItems');
+            if (items.length === 0) {
+                container.innerHTML = '<div class="browse-empty">此文件夹为空</div>';
+                return;
+            }
+
+            container.innerHTML = items.map(item => {
+                if (item.is_dir) {
+                    return `<div class="browse-item browse-dir" onclick="browseTo('${item.path.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}')">
+                        📁 ${item.name}
+                    </div>`;
+                }
+                return '';
+            }).join('');
+        }
+
+        function selectCurrentFolder() {
+            document.getElementById('outputPath').value = currentBrowsePath;
+            closeFolderBrowser();
+        }
+
+        function browseParent() {
+            if (currentBrowsePath) {
+                const parentPath = currentBrowsePath.replace(/[\\/][^\\/]+[\\/]?$/, '');
+                browseTo(parentPath || '');
+            }
+        }
     </script>
+
+    <!-- 文件夹浏览器弹窗 -->
+    <div id="folderBrowserModal" class="modal" style="display:none;">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>选择输出文件夹</h3>
+                <span class="modal-close" onclick="closeFolderBrowser()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <div class="browse-nav">
+                    <input type="text" id="browsePath" readonly>
+                    <button onclick="browseParent()">⬆ 上级</button>
+                    <button onclick="browseTo(document.getElementById('browsePath').value)">🔄</button>
+                </div>
+                <div id="browseItems" class="browse-list"></div>
+            </div>
+            <div class="modal-footer">
+                <button onclick="selectCurrentFolder()">选择此文件夹</button>
+                <button onclick="closeFolderBrowser()">取消</button>
+            </div>
+        </div>
+    </div>
 </body>
 </html>
