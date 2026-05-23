@@ -7,6 +7,135 @@
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
 </head>
 <body>
-    <h1>doc2md 文档转换工具</h1>
+    <div class="container">
+        <h1>doc2md 文档转换工具</h1>
+
+        <div class="form-section">
+            <div class="form-group">
+                <label for="inputPath">源文件夹路径：</label>
+                <div class="input-row">
+                    <input type="text" id="inputPath" placeholder="请输入源文件夹路径">
+                    <button id="scanBtn" onclick="scanFiles()">扫描</button>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label for="outputPath">输出文件夹路径：</label>
+                <input type="text" id="outputPath" value="./output" placeholder="输出文件夹路径">
+            </div>
+        </div>
+
+        <div id="scanResult" class="result-section" style="display:none;">
+            <h3>扫描结果</h3>
+            <div id="fileList" class="file-list"></div>
+            <button id="convertBtn" onclick="convertFiles()" disabled>开始转换</button>
+        </div>
+
+        <div id="convertResult" class="result-section" style="display:none;">
+            <h3>转换结果</h3>
+            <div id="stats"></div>
+            <div id="failures" style="display:none;">
+                <h4>失败文件：</h4>
+                <ul id="failureList"></ul>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let scannedFiles = [];
+
+        function scanFiles() {
+            const inputPath = document.getElementById('inputPath').value;
+            if (!inputPath) {
+                alert('请输入源文件夹路径');
+                return;
+            }
+
+            fetch('/api/scan', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({input_path: inputPath})
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    scannedFiles = data.files;
+                    displayScanResult(data.files);
+                    document.getElementById('convertBtn').disabled = false;
+                } else {
+                    alert('扫描失败: ' + data.error);
+                }
+            })
+            .catch(error => {
+                alert('请求失败: ' + error);
+            });
+        }
+
+        function displayScanResult(files) {
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = files.map(f =>
+                `<div class="file-item">
+                    <span class="file-path">${f.path}</span>
+                    <span class="file-size">${formatSize(f.size)}</span>
+                    <span class="file-type">${f.type}</span>
+                </div>`
+            ).join('');
+
+            document.getElementById('scanResult').style.display = 'block';
+        }
+
+        function formatSize(bytes) {
+            if (bytes < 1024) return bytes + ' B';
+            if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+            return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+        }
+
+        function convertFiles() {
+            const inputPath = document.getElementById('inputPath').value;
+            const outputPath = document.getElementById('outputPath').value;
+
+            document.getElementById('convertBtn').disabled = true;
+            document.getElementById('convertBtn').textContent = '转换中...';
+
+            fetch('/api/convert', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    input_path: inputPath,
+                    output_path: outputPath
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    displayConvertResult(data);
+                } else {
+                    alert('转换失败: ' + data.error);
+                }
+                document.getElementById('convertBtn').disabled = false;
+                document.getElementById('convertBtn').textContent = '开始转换';
+            })
+            .catch(error => {
+                alert('请求失败: ' + error);
+                document.getElementById('convertBtn').disabled = false;
+                document.getElementById('convertBtn').textContent = '开始转换';
+            });
+        }
+
+        function displayConvertResult(data) {
+            document.getElementById('stats').innerHTML =
+                `<p>✓ 成功: ${data.converted}  ✗ 失败: ${data.failed}</p>`;
+
+            if (data.failures && data.failures.length > 0) {
+                document.getElementById('failureList').innerHTML =
+                    data.failures.map(f =>
+                        `<li>${f.file}: ${f.error}</li>`
+                    ).join('');
+                document.getElementById('failures').style.display = 'block';
+            }
+
+            document.getElementById('convertResult').style.display = 'block';
+        }
+    </script>
 </body>
 </html>
