@@ -12,9 +12,11 @@
 
         <div class="form-section">
             <div class="form-group">
-                <label for="inputPath">源文件夹路径：</label>
+                <label>源文件夹：</label>
                 <div class="input-row">
-                    <input type="text" id="inputPath" placeholder="请输入源文件夹路径">
+                    <input type="file" id="folderInput" webkitdirectory directory multiple style="display:none" onchange="handleFolderSelect(this)">
+                    <input type="text" id="inputPath" placeholder="请选择文件夹" readonly>
+                    <button onclick="document.getElementById('folderInput').click()">选择文件夹</button>
                     <button id="scanBtn" onclick="scanFiles()">扫描</button>
                 </div>
             </div>
@@ -43,32 +45,58 @@
 
     <script>
         let scannedFiles = [];
+        let selectedFiles = [];
+
+        function handleFolderSelect(input) {
+            const files = input.files;
+            if (files.length > 0) {
+                // 获取文件夹名称（从第一个文件的相对路径）
+                const firstPath = files[0].webkitRelativePath;
+                const folderName = firstPath.split('/')[0];
+                document.getElementById('inputPath').value = folderName + ' (' + files.length + ' 个文件)';
+                selectedFiles = files;
+            }
+        }
 
         function scanFiles() {
-            const inputPath = document.getElementById('inputPath').value;
-            if (!inputPath) {
-                alert('请输入源文件夹路径');
+            if (selectedFiles.length === 0) {
+                alert('请先选择文件夹');
                 return;
             }
 
-            fetch('/api/scan', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({input_path: inputPath})
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    scannedFiles = data.files;
-                    displayScanResult(data.files);
-                    document.getElementById('convertBtn').disabled = false;
-                } else {
-                    alert('扫描失败: ' + data.error);
-                }
-            })
-            .catch(error => {
-                alert('请求失败: ' + error);
+            // 构建文件列表
+            const fileList = [];
+            for (let i = 0; i < selectedFiles.length; i++) {
+                const file = selectedFiles[i];
+                const relativePath = file.webkitRelativePath;
+                // 去掉第一级文件夹名称
+                const pathParts = relativePath.split('/');
+                const path = pathParts.slice(1).join('/');
+                fileList.push({
+                    path: path,
+                    size: file.size,
+                    name: file.name
+                });
+            }
+
+            // 过滤支持的格式
+            const supportedExts = ['pdf', 'docx', 'xlsx', 'pptx', 'html', 'csv', 'json', 'xml', 'epub'];
+            const supportedFiles = fileList.filter(f => {
+                const ext = f.name.split('.').pop().toLowerCase();
+                return supportedExts.includes(ext);
             });
+
+            scannedFiles = supportedFiles.map(f => {
+                const ext = f.name.split('.').pop().toLowerCase();
+                return {
+                    path: f.path,
+                    size: f.size,
+                    type: ext
+                };
+            });
+
+            displayScanResult(scannedFiles);
+            document.getElementById('convertBtn').disabled = false;
         }
 
         function displayScanResult(files) {
@@ -91,19 +119,26 @@
         }
 
         function convertFiles() {
-            const inputPath = document.getElementById('inputPath').value;
-            const outputPath = document.getElementById('outputPath').value;
+            if (selectedFiles.length === 0) {
+                alert('请先选择文件夹');
+                return;
+            }
 
+            const outputPath = document.getElementById('outputPath').value;
             document.getElementById('convertBtn').disabled = true;
             document.getElementById('convertBtn').textContent = '转换中...';
 
+            // 上传文件并转换
+            const formData = new FormData();
+            formData.append('output_path', outputPath);
+
+            for (let i = 0; i < selectedFiles.length; i++) {
+                formData.append('files', selectedFiles[i]);
+            }
+
             fetch('/api/convert', {
                 method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    input_path: inputPath,
-                    output_path: outputPath
-                })
+                body: formData
             })
             .then(response => response.json())
             .then(data => {
