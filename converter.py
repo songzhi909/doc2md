@@ -1,11 +1,12 @@
 import os
+import tempfile
 from typing import List, Dict, Any
 from markitdown import MarkItDown
 from logger import logger
 
 SUPPORTED_EXTENSIONS = {
-    # Office 文档（仅支持新版格式）
-    'pdf', 'docx', 'xlsx', 'pptx',
+    # Office 文档
+    'pdf', 'doc', 'docx', 'xlsx', 'pptx',
     # 数据格式
     'csv', 'json', 'xml',
     # 网页格式
@@ -16,7 +17,34 @@ SUPPORTED_EXTENSIONS = {
     'txt', 'md'
 }
 
+# 需要先转换为 docx 的格式
+DOC_TO_DOCX_EXTENSIONS = {'doc'}
+
 _md = MarkItDown()
+
+def _doc_to_docx(doc_path: str) -> str:
+    """
+    将 .doc 文件转换为 .docx 格式
+
+    Args:
+        doc_path: .doc 文件路径
+
+    Returns:
+        str: 转换后的 .docx 文件路径
+
+    Raises:
+        Exception: 转换失败时抛出异常
+    """
+    from doc2docx import convert
+
+    # 创建临时目录保存转换后的文件
+    temp_dir = tempfile.mkdtemp()
+    docx_path = os.path.join(temp_dir, os.path.splitext(os.path.basename(doc_path))[0] + '.docx')
+
+    logger.debug(f'转换 .doc 到 .docx: {doc_path} -> {docx_path}')
+    convert(doc_path, docx_path)
+
+    return docx_path
 
 def scan_files(input_path: str) -> List[Dict[str, Any]]:
     """
@@ -76,8 +104,18 @@ def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Di
     if not os.path.exists(input_file):
         return {'success': False, 'error': f'输入文件不存在: {input_file}'}
 
+    docx_temp_file = None
     try:
-        result = md.convert(input_file)
+        # 如果是 .doc 文件，先转换为 .docx
+        ext = os.path.splitext(input_file)[1].lower().lstrip('.')
+        if ext in DOC_TO_DOCX_EXTENSIONS:
+            logger.debug(f'检测到 .doc 文件，先转换为 .docx: {input_file}')
+            docx_temp_file = _doc_to_docx(input_file)
+            convert_file_path = docx_temp_file
+        else:
+            convert_file_path = input_file
+
+        result = md.convert(convert_file_path)
 
         # 确保输出目录存在
         output_dir = os.path.dirname(output_file)
@@ -95,6 +133,14 @@ def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Di
     except Exception as e:
         logger.exception(f"转换失败 {input_file}")
         return {'success': False, 'error': f'转换失败: {e}'}
+    finally:
+        # 清理临时的 .docx 文件
+        if docx_temp_file and os.path.exists(docx_temp_file):
+            try:
+                os.remove(docx_temp_file)
+                os.rmdir(os.path.dirname(docx_temp_file))
+            except Exception:
+                pass
 
 def convert_batch(input_path: str, output_path: str) -> Dict[str, Any]:
     """
