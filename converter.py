@@ -58,12 +58,17 @@ def convert_file(input_file: str, output_file: str) -> Dict[str, Any]:
     Returns:
         dict: {'success': bool, 'error': str or None}
     """
+    if not os.path.exists(input_file):
+        return {'success': False, 'error': f'输入文件不存在: {input_file}'}
+
     try:
         md = MarkItDown()
         result = md.convert(input_file)
 
         # 确保输出目录存在
-        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+        output_dir = os.path.dirname(output_file)
+        if output_dir:
+            os.makedirs(output_dir, exist_ok=True)
 
         # 写入markdown文件
         with open(output_file, 'w', encoding='utf-8') as f:

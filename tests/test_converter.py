@@ -56,15 +56,12 @@ def test_scan_files_empty_directory():
         result = scan_files(tmpdir)
         assert result == []
 
-def test_convert_file_creates_markdown():
-    """测试转换单个文件生成markdown"""
-    # 这个测试需要实际的测试文件，先跳过实际转换
-    # 只测试函数签名和错误处理
+def test_convert_file_nonexistent_input():
+    """测试输入文件不存在时返回错误"""
     with tempfile.TemporaryDirectory() as tmpdir:
         input_file = os.path.join(tmpdir, 'nonexistent.pdf')
         output_file = os.path.join(tmpdir, 'output.md')
 
-        # 测试文件不存在的情况
         result = convert_file(input_file, output_file)
         assert result['success'] == False
-        assert 'error' in result
+        assert '输入文件不存在' in result['error']
