@@ -4,7 +4,16 @@ from markitdown import MarkItDown
 from logger import logger
 
 SUPPORTED_EXTENSIONS = {
-    'pdf', 'docx', 'xlsx', 'pptx', 'html', 'csv', 'json', 'xml', 'epub'
+    # Office 文档
+    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+    # 数据格式
+    'csv', 'json', 'xml',
+    # 网页格式
+    'html', 'htm',
+    # 电子书
+    'epub',
+    # 文本格式
+    'txt', 'md', 'rtf'
 }
 
 _md = MarkItDown()

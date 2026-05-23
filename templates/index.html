@@ -80,7 +80,13 @@
             }
 
             // 过滤支持的格式
-            const supportedExts = ['pdf', 'docx', 'xlsx', 'pptx', 'html', 'csv', 'json', 'xml', 'epub'];
+            const supportedExts = [
+                'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+                'csv', 'json', 'xml',
+                'html', 'htm',
+                'epub',
+                'txt', 'md', 'rtf'
+            ];
             const supportedFiles = fileList.filter(f => {
                 const ext = f.name.split('.').pop().toLowerCase();
                 return supportedExts.includes(ext);
