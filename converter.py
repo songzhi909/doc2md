@@ -4,8 +4,8 @@ from markitdown import MarkItDown
 from logger import logger
 
 SUPPORTED_EXTENSIONS = {
-    # Office 文档
-    'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+    # Office 文档（仅支持新版格式）
+    'pdf', 'docx', 'xlsx', 'pptx',
     # 数据格式
     'csv', 'json', 'xml',
     # 网页格式
@@ -13,7 +13,7 @@ SUPPORTED_EXTENSIONS = {
     # 电子书
     'epub',
     # 文本格式
-    'txt', 'md', 'rtf'
+    'txt', 'md'
 }
 
 _md = MarkItDown()

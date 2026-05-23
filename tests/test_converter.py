@@ -9,11 +9,8 @@ def test_scan_files_finds_supported_formats():
         # 创建测试文件
         test_files = [
             'test.pdf',
-            'test.doc',
             'test.docx',
-            'test.xls',
             'test.xlsx',
-            'test.ppt',
             'test.pptx',
             'test.html',
             'test.htm',
@@ -23,7 +20,7 @@ def test_scan_files_finds_supported_formats():
             'test.epub',
             'test.txt',
             'test.md',
-            'test.rtf',
+            'test.doc',  # 不支持的旧版格式
             'test.exe',  # 不支持的格式
         ]
         for f in test_files:
@@ -32,9 +29,9 @@ def test_scan_files_finds_supported_formats():
 
         result = scan_files(tmpdir)
 
-        # 应该找到16个支持的文件，排除.exe
-        assert len(result) == 16
-        supported_types = {'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'html', 'htm', 'csv', 'json', 'xml', 'epub', 'txt', 'md', 'rtf'}
+        # 应该找到12个支持的文件，排除.doc和.exe
+        assert len(result) == 12
+        supported_types = {'pdf', 'docx', 'xlsx', 'pptx', 'html', 'htm', 'csv', 'json', 'xml', 'epub', 'txt', 'md'}
         assert all(f['type'] in supported_types for f in result)
 
 def test_scan_files_preserves_structure():

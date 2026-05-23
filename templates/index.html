@@ -79,13 +79,13 @@
                 });
             }
 
-            // 过滤支持的格式
+            // 过滤支持的格式（注意：markitdown 不支持旧版 Office 格式 .doc .xls .ppt）
             const supportedExts = [
-                'pdf', 'doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx',
+                'pdf', 'docx', 'xlsx', 'pptx',
                 'csv', 'json', 'xml',
                 'html', 'htm',
                 'epub',
-                'txt', 'md', 'rtf'
+                'txt', 'md'
             ];
             const supportedFiles = fileList.filter(f => {
                 const ext = f.name.split('.').pop().toLowerCase();
