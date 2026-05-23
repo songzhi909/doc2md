@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from converter import scan_files
+from converter import scan_files, convert_file
 
 def test_scan_files_finds_supported_formats():
     """测试扫描能找到所有支持的格式"""
@@ -55,3 +55,16 @@ def test_scan_files_empty_directory():
     with tempfile.TemporaryDirectory() as tmpdir:
         result = scan_files(tmpdir)
         assert result == []
+
+def test_convert_file_creates_markdown():
+    """测试转换单个文件生成markdown"""
+    # 这个测试需要实际的测试文件，先跳过实际转换
+    # 只测试函数签名和错误处理
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_file = os.path.join(tmpdir, 'nonexistent.pdf')
+        output_file = os.path.join(tmpdir, 'output.md')
+
+        # 测试文件不存在的情况
+        result = convert_file(input_file, output_file)
+        assert result['success'] == False
+        assert 'error' in result

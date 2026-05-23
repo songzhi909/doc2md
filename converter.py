@@ -1,6 +1,7 @@
 import os
 import logging
 from typing import List, Dict, Any
+from markitdown import MarkItDown
 
 logger = logging.getLogger(__name__)
 
@@ -45,3 +46,29 @@ def scan_files(input_path: str) -> List[Dict[str, Any]]:
                 })
 
     return files
+
+def convert_file(input_file: str, output_file: str) -> Dict[str, Any]:
+    """
+    转换单个文件为Markdown
+
+    Args:
+        input_file: 输入文件路径
+        output_file: 输出markdown文件路径
+
+    Returns:
+        dict: {'success': bool, 'error': str or None}
+    """
+    try:
+        md = MarkItDown()
+        result = md.convert(input_file)
+
+        # 确保输出目录存在
+        os.makedirs(os.path.dirname(output_file), exist_ok=True)
+
+        # 写入markdown文件
+        with open(output_file, 'w', encoding='utf-8') as f:
+            f.write(result.text_content)
+
+        return {'success': True, 'error': None}
+    except Exception as e:
+        return {'success': False, 'error': str(e)}
