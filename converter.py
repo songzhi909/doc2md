@@ -9,6 +9,8 @@ SUPPORTED_EXTENSIONS = {
     'pdf', 'docx', 'xlsx', 'pptx', 'html', 'csv', 'json', 'xml', 'epub'
 }
 
+_md = MarkItDown()
+
 def scan_files(input_path: str) -> List[Dict[str, Any]]:
     """
     扫描输入文件夹，返回支持的文件列表
@@ -47,22 +49,25 @@ def scan_files(input_path: str) -> List[Dict[str, Any]]:
 
     return files
 
-def convert_file(input_file: str, output_file: str) -> Dict[str, Any]:
+def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Dict[str, Any]:
     """
     转换单个文件为Markdown
 
     Args:
         input_file: 输入文件路径
         output_file: 输出markdown文件路径
+        md: MarkItDown实例（可选，默认使用模块级单例）
 
     Returns:
         dict: {'success': bool, 'error': str or None}
     """
+    if md is None:
+        md = _md
+
     if not os.path.exists(input_file):
         return {'success': False, 'error': f'输入文件不存在: {input_file}'}
 
     try:
-        md = MarkItDown()
         result = md.convert(input_file)
 
         # 确保输出目录存在
@@ -74,6 +79,10 @@ def convert_file(input_file: str, output_file: str) -> Dict[str, Any]:
         with open(output_file, 'w', encoding='utf-8') as f:
             f.write(result.text_content)
 
+        logger.info(f"转换成功: {input_file} -> {output_file}")
         return {'success': True, 'error': None}
+    except PermissionError as e:
+        return {'success': False, 'error': f'权限不足: {e}'}
     except Exception as e:
-        return {'success': False, 'error': str(e)}
+        logger.exception(f"转换失败 {input_file}")
+        return {'success': False, 'error': f'转换失败: {e}'}

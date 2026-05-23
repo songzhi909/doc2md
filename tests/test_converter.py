@@ -65,3 +65,20 @@ def test_convert_file_nonexistent_input():
         result = convert_file(input_file, output_file)
         assert result['success'] == False
         assert '输入文件不存在' in result['error']
+
+def test_convert_file_success():
+    """测试成功转换文件"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        input_file = os.path.join(tmpdir, 'test.txt')
+        output_file = os.path.join(tmpdir, 'sub', 'output.md')
+
+        with open(input_file, 'w', encoding='utf-8') as f:
+            f.write('Hello world')
+
+        result = convert_file(input_file, output_file)
+        assert result['success'] is True
+        assert result['error'] is None
+        assert os.path.exists(output_file)
+
+        with open(output_file, encoding='utf-8') as f:
+            assert 'Hello world' in f.read()
