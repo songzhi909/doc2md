@@ -87,15 +87,17 @@ def test_convert_batch_processes_all_files():
     """测试批量转换处理所有文件"""
     with tempfile.TemporaryDirectory() as input_dir:
         with tempfile.TemporaryDirectory() as output_dir:
-            # 创建测试文件结构
+            # 创建测试文件结构（使用支持的格式）
             os.makedirs(os.path.join(input_dir, 'subdir'))
-            # 创建空文件（转换会失败，但应该记录而不是中断）
-            open(os.path.join(input_dir, 'test1.txt'), 'w').close()
-            open(os.path.join(input_dir, 'subdir', 'test2.txt'), 'w').close()
+            with open(os.path.join(input_dir, 'test1.json'), 'w', encoding='utf-8') as f:
+                f.write('{"key": "value1"}')
+            with open(os.path.join(input_dir, 'subdir', 'test2.json'), 'w', encoding='utf-8') as f:
+                f.write('{"key": "value2"}')
 
             result = convert_batch(input_dir, output_dir)
 
-            assert 'converted' in result
-            assert 'failed' in result
-            assert 'failures' in result
-            assert isinstance(result['failures'], list)
+            assert result['converted'] == 2
+            assert result['failed'] == 0
+            assert result['failures'] == []
+            assert os.path.exists(os.path.join(output_dir, 'test1.md'))
+            assert os.path.exists(os.path.join(output_dir, 'subdir', 'test2.md'))
