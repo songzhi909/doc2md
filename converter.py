@@ -1,9 +1,7 @@
 import os
-import logging
 from typing import List, Dict, Any
 from markitdown import MarkItDown
-
-logger = logging.getLogger(__name__)
+from logger import logger
 
 SUPPORTED_EXTENSIONS = {
     'pdf', 'docx', 'xlsx', 'pptx', 'html', 'csv', 'json', 'xml', 'epub'
@@ -27,6 +25,7 @@ def scan_files(input_path: str) -> List[Dict[str, Any]]:
     if not os.path.isdir(input_path):
         raise ValueError(f"输入路径不存在或不是目录: {input_path}")
 
+    logger.info(f'开始扫描文件夹: {input_path}')
     files = []
 
     for root, dirs, filenames in os.walk(input_path):
@@ -47,6 +46,7 @@ def scan_files(input_path: str) -> List[Dict[str, Any]]:
                     'type': ext
                 })
 
+    logger.info(f'扫描完成，找到 {len(files)} 个支持的文件')
     return files
 
 def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Dict[str, Any]:
@@ -99,34 +99,40 @@ def convert_batch(input_path: str, output_path: str) -> Dict[str, Any]:
         dict: {'converted': int, 'failed': int, 'failures': list}
     """
     if not os.path.isdir(input_path):
+        logger.error(f'输入路径不存在或不是目录: {input_path}')
         return {
             'converted': 0,
             'failed': 1,
             'failures': [{'file': input_path, 'error': f'输入路径不存在或不是目录: {input_path}'}]
         }
 
+    logger.info(f'开始批量转换: {input_path} -> {output_path}')
     files = scan_files(input_path)
     converted = 0
     failed = 0
     failures = []
 
-    for file_info in files:
+    for i, file_info in enumerate(files, 1):
         input_file = os.path.join(input_path, file_info['path'])
         # 输出文件扩展名改为.md（对多点文件名如 archive.tar.gz 会产生 archive.tar.md）
         output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
         output_file = os.path.join(output_path, output_rel)
 
+        logger.debug(f'[{i}/{len(files)}] 转换中: {file_info["path"]}')
         result = convert_file(input_file, output_file)
 
         if result['success']:
             converted += 1
+            logger.debug(f'[{i}/{len(files)}] 转换成功: {file_info["path"]}')
         else:
             failed += 1
             failures.append({
                 'file': file_info['path'],
                 'error': result['error']
             })
+            logger.warning(f'[{i}/{len(files)}] 转换失败: {file_info["path"]} - {result["error"]}')
 
+    logger.info(f'批量转换完成: 成功 {converted} 个, 失败 {failed} 个')
     return {
         'converted': converted,
         'failed': failed,
