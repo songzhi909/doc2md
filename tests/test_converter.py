@@ -1,7 +1,7 @@
 import os
 import tempfile
 import pytest
-from converter import scan_files, convert_file
+from converter import scan_files, convert_file, convert_batch
 
 def test_scan_files_finds_supported_formats():
     """测试扫描能找到所有支持的格式"""
@@ -82,3 +82,20 @@ def test_convert_file_success():
 
         with open(output_file, encoding='utf-8') as f:
             assert 'Hello world' in f.read()
+
+def test_convert_batch_processes_all_files():
+    """测试批量转换处理所有文件"""
+    with tempfile.TemporaryDirectory() as input_dir:
+        with tempfile.TemporaryDirectory() as output_dir:
+            # 创建测试文件结构
+            os.makedirs(os.path.join(input_dir, 'subdir'))
+            # 创建空文件（转换会失败，但应该记录而不是中断）
+            open(os.path.join(input_dir, 'test1.txt'), 'w').close()
+            open(os.path.join(input_dir, 'subdir', 'test2.txt'), 'w').close()
+
+            result = convert_batch(input_dir, output_dir)
+
+            assert 'converted' in result
+            assert 'failed' in result
+            assert 'failures' in result
+            assert isinstance(result['failures'], list)

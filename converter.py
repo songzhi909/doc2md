@@ -86,3 +86,42 @@ def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Di
     except Exception as e:
         logger.exception(f"转换失败 {input_file}")
         return {'success': False, 'error': f'转换失败: {e}'}
+
+def convert_batch(input_path, output_path):
+    """
+    批量转换文件夹中的所有支持文件
+
+    Args:
+        input_path: 输入文件夹路径
+        output_path: 输出文件夹路径
+
+    Returns:
+        dict: {'converted': int, 'failed': int, 'failures': list}
+    """
+    files = scan_files(input_path)
+    converted = 0
+    failed = 0
+    failures = []
+
+    for file_info in files:
+        input_file = os.path.join(input_path, file_info['path'])
+        # 输出文件扩展名改为.md
+        output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
+        output_file = os.path.join(output_path, output_rel)
+
+        result = convert_file(input_file, output_file)
+
+        if result['success']:
+            converted += 1
+        else:
+            failed += 1
+            failures.append({
+                'file': file_info['path'],
+                'error': result['error']
+            })
+
+    return {
+        'converted': converted,
+        'failed': failed,
+        'failures': failures
+    }
