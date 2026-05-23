@@ -20,7 +20,8 @@ def test_scan_files_finds_supported_formats():
             'test.txt',  # 不支持的格式
         ]
         for f in test_files:
-            open(os.path.join(tmpdir, f), 'w').close()
+            with open(os.path.join(tmpdir, f), 'w') as fp:
+                pass
 
         result = scan_files(tmpdir)
 
@@ -33,11 +34,24 @@ def test_scan_files_preserves_structure():
     with tempfile.TemporaryDirectory() as tmpdir:
         # 创建子目录结构
         os.makedirs(os.path.join(tmpdir, 'subdir'))
-        open(os.path.join(tmpdir, 'test.pdf'), 'w').close()
-        open(os.path.join(tmpdir, 'subdir', 'test.docx'), 'w').close()
+        with open(os.path.join(tmpdir, 'test.pdf'), 'w') as fp:
+            pass
+        with open(os.path.join(tmpdir, 'subdir', 'test.docx'), 'w') as fp:
+            pass
 
         result = scan_files(tmpdir)
 
         paths = [f['path'] for f in result]
         assert 'test.pdf' in paths
         assert os.path.join('subdir', 'test.docx') in paths
+
+def test_scan_files_invalid_path():
+    """测试无效路径抛出异常"""
+    with pytest.raises(ValueError, match="输入路径不存在或不是目录"):
+        scan_files('/nonexistent/path')
+
+def test_scan_files_empty_directory():
+    """测试空目录返回空列表"""
+    with tempfile.TemporaryDirectory() as tmpdir:
+        result = scan_files(tmpdir)
+        assert result == []
