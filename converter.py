@@ -87,7 +87,7 @@ def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Di
         logger.exception(f"转换失败 {input_file}")
         return {'success': False, 'error': f'转换失败: {e}'}
 
-def convert_batch(input_path, output_path):
+def convert_batch(input_path: str, output_path: str) -> Dict[str, Any]:
     """
     批量转换文件夹中的所有支持文件
 
@@ -98,6 +98,13 @@ def convert_batch(input_path, output_path):
     Returns:
         dict: {'converted': int, 'failed': int, 'failures': list}
     """
+    if not os.path.isdir(input_path):
+        return {
+            'converted': 0,
+            'failed': 1,
+            'failures': [{'file': input_path, 'error': f'输入路径不存在或不是目录: {input_path}'}]
+        }
+
     files = scan_files(input_path)
     converted = 0
     failed = 0
@@ -105,7 +112,7 @@ def convert_batch(input_path, output_path):
 
     for file_info in files:
         input_file = os.path.join(input_path, file_info['path'])
-        # 输出文件扩展名改为.md
+        # 输出文件扩展名改为.md（对多点文件名如 archive.tar.gz 会产生 archive.tar.md）
         output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
         output_file = os.path.join(output_path, output_rel)
 

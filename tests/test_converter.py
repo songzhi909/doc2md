@@ -101,3 +101,23 @@ def test_convert_batch_processes_all_files():
             assert result['failures'] == []
             assert os.path.exists(os.path.join(output_dir, 'test1.md'))
             assert os.path.exists(os.path.join(output_dir, 'subdir', 'test2.md'))
+
+def test_convert_batch_empty_directory():
+    """测试空目录返回零结果"""
+    with tempfile.TemporaryDirectory() as input_dir:
+        with tempfile.TemporaryDirectory() as output_dir:
+            result = convert_batch(input_dir, output_dir)
+
+            assert result['converted'] == 0
+            assert result['failed'] == 0
+            assert result['failures'] == []
+
+def test_convert_batch_invalid_path():
+    """测试无效输入路径返回错误"""
+    with tempfile.TemporaryDirectory() as output_dir:
+        result = convert_batch('/nonexistent/path', output_dir)
+
+        assert result['converted'] == 0
+        assert result['failed'] == 1
+        assert len(result['failures']) == 1
+        assert '输入路径不存在或不是目录' in result['failures'][0]['error']
