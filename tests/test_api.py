@@ -79,24 +79,20 @@ def test_convert_api_file_upload(client):
 
 def test_browse_api_returns_directories(client):
     """测试浏览API返回目录列表"""
-    with tempfile.TemporaryDirectory() as tmpdir:
-        # 创建子目录和文件
-        os.makedirs(os.path.join(tmpdir, 'subdir1'))
-        os.makedirs(os.path.join(tmpdir, 'subdir2'))
-        open(os.path.join(tmpdir, 'file.txt'), 'w').close()
+    # 使用项目目录（在允许列表中）
+    import app as app_module
+    test_dir = app_module.BASE_DIR
 
-        response = client.post('/api/browse', json={
-            'path': tmpdir
-        })
+    response = client.post('/api/browse', json={
+        'path': test_dir
+    })
 
-        assert response.status_code == 200
-        data = response.get_json()
-        assert data['success'] == True
-        assert len(data['items']) == 3
-        # 目录应该排在前面
-        assert data['items'][0]['is_dir'] == True
-        assert data['items'][1]['is_dir'] == True
-        assert data['items'][2]['is_dir'] == False
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == True
+    assert len(data['items']) > 0
+    # 应该只返回目录
+    assert all(item['is_dir'] for item in data['items'])
 
 def test_browse_api_invalid_path(client):
     """测试浏览API处理无效路径"""
@@ -110,7 +106,7 @@ def test_browse_api_invalid_path(client):
     assert 'error' in data
 
 def test_browse_api_empty_path(client):
-    """测试浏览API空路径返回驱动器列表"""
+    """测试浏览API空路径返回系统根目录"""
     response = client.post('/api/browse', json={
         'path': ''
     })
@@ -118,10 +114,9 @@ def test_browse_api_empty_path(client):
     assert response.status_code == 200
     data = response.get_json()
     assert data['success'] == True
-    # Windows 应该返回驱动器列表
-    if os.name == 'nt':
-        assert len(data['items']) > 0
-        assert data['items'][0]['path'].endswith(':\\')
+    # 应该返回系统根目录（Windows返回磁盘分区，Linux返回/）
+    assert len(data['items']) > 0
+    assert all(item['is_dir'] for item in data['items'])
 
 def test_config_api(client):
     """测试配置API"""
@@ -169,3 +164,60 @@ def test_export_api_invalid_path(client):
     data = response.get_json()
     assert data['success'] == False
     assert 'error' in data
+
+def test_convert_stream_api(client):
+    """测试流式转换API"""
+    with tempfile.TemporaryDirectory() as input_dir:
+        with tempfile.TemporaryDirectory() as output_dir:
+            # 创建测试文件
+            with open(os.path.join(input_dir, 'test.json'), 'w', encoding='utf-8') as f:
+                f.write('{"key": "value"}')
+
+            response = client.post('/api/convert-stream', json={
+                'input_path': input_dir,
+                'output_path': output_dir
+            })
+
+            assert response.status_code == 200
+            assert 'text/event-stream' in response.content_type
+
+            # 解析 SSE 事件
+            data = response.data.decode('utf-8')
+            events = []
+            for line in data.split('\n'):
+                if line.startswith('data: '):
+                    import json
+                    events.append(json.loads(line[6:]))
+
+            # 应该有 start、progress 和 complete 事件
+            assert len(events) >= 3
+            assert events[0]['type'] == 'start'
+            assert events[-1]['type'] == 'complete'
+            assert events[-1]['converted'] == 1
+            assert events[-1]['failed'] == 0
+
+def test_convert_stream_api_invalid_path(client):
+    """测试流式转换API处理无效路径"""
+    response = client.post('/api/convert-stream', json={
+        'input_path': '/nonexistent/path',
+        'output_path': './output'
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == False
+    assert 'error' in data
+
+def test_browse_api_any_path(client):
+    """测试浏览API支持访问任意路径"""
+    # 浏览系统目录（用于选择输出路径）
+    test_path = 'C:\\Windows' if os.name == 'nt' else '/etc'
+    response = client.post('/api/browse', json={
+        'path': test_path
+    })
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data['success'] == True
+    assert len(data['items']) > 0
+    assert all(item['is_dir'] for item in data['items'])

@@ -1,9 +1,12 @@
 .claude/
 docs/
 output/
+dist/
+build/
 __pycache__/
 .pytest_cache/
 *.pyc
+*.spec
 .env
 temp/
 logs/

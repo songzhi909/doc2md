@@ -2,13 +2,13 @@ import os
 import logging
 from logging.handlers import RotatingFileHandler
 from datetime import datetime
-from config import get_config
+from config import get_config, get_base_dir
 
 def setup_logger(name='doc2md'):
     """配置日志记录器"""
     config = get_config()
     log_config = config.get('log', {})
-    log_dir = log_config.get('dir', 'logs')
+    log_dir = os.path.join(get_base_dir(), log_config.get('dir', 'logs'))
 
     # 创建日志目录
     os.makedirs(log_dir, exist_ok=True)

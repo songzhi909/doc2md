@@ -1,9 +1,14 @@
 import os
+import shutil
 import tempfile
+import warnings
 from typing import List, Dict, Any
+
+warnings.filterwarnings('ignore', message='.*FontBBox.*', category=UserWarning)
+
 from markitdown import MarkItDown
 from logger import logger
-from config import get_config
+from config import get_config, get_base_dir
 
 # 从配置文件加载支持的扩展名
 _config = get_config()
@@ -19,7 +24,7 @@ SUPPORTED_EXTENSIONS = set(_config.get('supported_extensions', [
 DOC_TO_DOCX_EXTENSIONS = {'doc'}
 
 # 临时目录配置
-TEMP_DIR = _config.get('temp', {}).get('dir', './temp')
+TEMP_DIR = os.path.join(get_base_dir(), _config.get('temp', {}).get('dir', './temp'))
 
 _md = MarkItDown()
 
@@ -36,6 +41,11 @@ def _doc_to_docx(doc_path: str) -> str:
     Raises:
         Exception: 转换失败时抛出异常
     """
+    import sys
+    if sys.platform == 'win32':
+        import pythoncom
+        pythoncom.CoInitialize()
+
     from doc2docx import convert
 
     # 创建临时目录保存转换后的文件
@@ -136,11 +146,11 @@ def convert_file(input_file: str, output_file: str, md: MarkItDown = None) -> Di
         logger.exception(f"转换失败 {input_file}")
         return {'success': False, 'error': f'转换失败: {e}'}
     finally:
-        # 清理临时的 .docx 文件
+        # 清理临时的 .docx 文件及其目录
         if docx_temp_file and os.path.exists(docx_temp_file):
             try:
-                os.remove(docx_temp_file)
-                os.rmdir(os.path.dirname(docx_temp_file))
+                temp_dir = os.path.dirname(docx_temp_file)
+                shutil.rmtree(temp_dir, ignore_errors=True)
             except Exception:
                 pass
 
@@ -227,35 +237,43 @@ def convert_batch_with_progress(input_path: str, output_path: str):
         'total': total
     }
 
-    for i, file_info in enumerate(files, 1):
-        input_file = os.path.join(input_path, file_info['path'])
-        output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
-        output_file = os.path.join(output_path, output_rel)
+    try:
+        for i, file_info in enumerate(files, 1):
+            input_file = os.path.join(input_path, file_info['path'])
+            output_rel = file_info['path'].rsplit('.', 1)[0] + '.md'
+            output_file = os.path.join(output_path, output_rel)
 
-        logger.debug(f'[{i}/{total}] 转换中: {file_info["path"]}')
-        result = convert_file(input_file, output_file)
+            logger.debug(f'[{i}/{total}] 转换中: {file_info["path"]}')
+            result = convert_file(input_file, output_file)
 
-        if result['success']:
-            converted += 1
-            logger.debug(f'[{i}/{total}] 转换成功: {file_info["path"]}')
-        else:
-            failed += 1
-            failures.append({
+            if result['success']:
+                converted += 1
+                logger.debug(f'[{i}/{total}] 转换成功: {file_info["path"]}')
+            else:
+                failed += 1
+                failures.append({
+                    'file': file_info['path'],
+                    'error': result['error']
+                })
+                logger.warning(f'[{i}/{total}] 转换失败: {file_info["path"]} - {result["error"]}')
+
+            # 发送进度事件
+            yield {
+                'type': 'progress',
+                'current': i,
+                'total': total,
                 'file': file_info['path'],
-                'error': result['error']
-            })
-            logger.warning(f'[{i}/{total}] 转换失败: {file_info["path"]} - {result["error"]}')
-
-        # 发送进度事件
+                'success': result['success'],
+                'converted': converted,
+                'failed': failed
+            }
+    except Exception as e:
+        logger.exception(f'批量转换异常')
         yield {
-            'type': 'progress',
-            'current': i,
-            'total': total,
-            'file': file_info['path'],
-            'success': result['success'],
-            'converted': converted,
-            'failed': failed
+            'type': 'error',
+            'error': f'转换过程异常: {str(e)}'
         }
+        return
 
     # 发送完成事件
     logger.info(f'批量转换完成: 成功 {converted} 个, 失败 {failed} 个')

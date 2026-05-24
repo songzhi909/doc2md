@@ -1,11 +1,21 @@
 import json
 import os
+import sys
 
 _config = None
 
-def load_config(config_path='config.json'):
+def get_base_dir():
+    """获取基础路径（支持 PyInstaller 打包）"""
+    if getattr(sys, 'frozen', False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+def load_config(config_path=None):
     """加载配置文件"""
     global _config
+    if config_path is None:
+        config_path = os.path.join(get_base_dir(), 'config.json')
+
     if not os.path.exists(config_path):
         _config = get_default_config()
         return _config
@@ -51,9 +61,11 @@ def get_default_config():
         }
     }
 
-def save_config(config, config_path='config.json'):
+def save_config(config, config_path=None):
     """保存配置到文件"""
     global _config
+    if config_path is None:
+        config_path = os.path.join(get_base_dir(), 'config.json')
     with open(config_path, 'w', encoding='utf-8') as f:
         json.dump(config, f, ensure_ascii=False, indent=4)
     _config = config
